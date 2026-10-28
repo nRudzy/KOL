@@ -158,6 +158,21 @@ func TestDesktopLifecycle(t *testing.T) {
 			_ = child.Process.Kill()
 			<-exited
 		}
+		// WebView2's separate browser process can briefly retain its profile
+		// after the host has exited. Wait for actual release before TempDir's
+		// automatic cleanup; the history lock is checked separately below.
+		until := time.Now().Add(15 * time.Second)
+		for {
+			err := os.RemoveAll(dir)
+			if err == nil {
+				break
+			}
+			if time.Now().After(until) {
+				t.Errorf("WebView2 profile cleanup: %v", err)
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 	}()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {

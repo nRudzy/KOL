@@ -23,7 +23,7 @@ function Invoke-KolSetup([string]$TaskArgument = '') {
   $kolProcess = Start-Process -FilePath $InstallerPath -ArgumentList $kolArguments -Wait -PassThru
   if ($kolProcess.ExitCode -ne 0) {
     Get-Content $kolLog -Tail 50
-    throw "L''installation a échoué : $($kolProcess.ExitCode)"
+    throw "L'installation a échoué : $($kolProcess.ExitCode)"
   }
 }
 function Assert-KolDataPreserved {
