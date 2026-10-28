@@ -1,0 +1,139 @@
+//go:build windows
+
+package clipboard
+
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"runtime"
+	"testing"
+	"unicode/utf16"
+	"unsafe"
+
+	"github.com/nRudzy/KOL/internal/history"
+	"golang.org/x/sys/windows"
+)
+
+func utf16Bytes(s string) []byte {
+	u := utf16.Encode([]rune(s + "\x00"))
+	b := make([]byte, len(u)*2)
+	for i, v := range u {
+		binary.LittleEndian.PutUint16(b[i*2:], v)
+	}
+	return b
+}
+
+// A separate window station owns a separate clipboard. Never replace the user's
+// live clipboard merely to test capture/restore, including on developer machines.
+func TestWindowsClipboardRoundTrip(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	user := windows.NewLazySystemDLL("user32.dll")
+	oldStation, _, _ := user.NewProc("GetProcessWindowStation").Call()
+	threadID := windows.GetCurrentThreadId()
+	oldDesktop, _, _ := user.NewProc("GetThreadDesktop").Call(uintptr(threadID))
+	// Named stations require administrator rights; an unnamed station gets a
+	// logon-session name and can be created by a regular Windows user.
+	station, _, err := user.NewProc("CreateWindowStationW").Call(0, 0, 0x000f037f, 0)
+	if station == 0 {
+		t.Fatal("create isolated clipboard station:", err)
+	}
+	defer user.NewProc("CloseWindowStation").Call(station)
+	if ok, _, err := user.NewProc("SetProcessWindowStation").Call(station); ok == 0 {
+		t.Fatal(err)
+	}
+	defer user.NewProc("SetProcessWindowStation").Call(oldStation)
+	desktopName, _ := windows.UTF16PtrFromString("KOLClipboardTests")
+	desktop, _, err := user.NewProc("CreateDesktopW").Call(uintptr(unsafe.Pointer(desktopName)), 0, 0, 0, 0x000f01ff, 0)
+	if desktop == 0 {
+		t.Fatal("create isolated desktop:", err)
+	}
+	defer user.NewProc("CloseDesktop").Call(desktop)
+	if ok, _, err := user.NewProc("SetThreadDesktop").Call(desktop); ok == 0 {
+		t.Fatal(err)
+	}
+	defer user.NewProc("SetThreadDesktop").Call(oldDesktop)
+	class, _ := windows.UTF16PtrFromString("STATIC")
+	name, _ := windows.UTF16PtrFromString("KOL integration tests")
+	hwnd, _, err := user.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	if hwnd == 0 {
+		t.Fatal(err)
+	}
+	defer user.NewProc("DestroyWindow").Call(hwnd)
+	cases := []struct {
+		name string
+		clip history.Snapshot
+	}{
+		{"unicode-whitespace", history.Snapshot{Formats: []history.Format{{ID: 13, Data: utf16Bytes("  éléphant 🐘\r\n\t ")}}}},
+		{"rich-and-binary", history.Snapshot{Formats: []history.Format{{Name: "HTML Format", Data: []byte("Version:1.0\r\n<html><b>raw</b></html>\x00")}, {Name: "Rich Text Format", Data: []byte("{\\rtf1\\b raw}\x00")}, {Name: "KOL.Test.Binary", Data: []byte{0, 1, 2, 0, 255}}, {ID: 13, Data: utf16Bytes("raw")}}}},
+	}
+	drop := make([]byte, 20)
+	binary.LittleEndian.PutUint32(drop, 20)
+	binary.LittleEndian.PutUint32(drop[16:], 1)
+	drop = append(drop, utf16Bytes("C:\\Windows\\notepad.exe\x00")...)
+	cases = append(cases, struct {
+		name string
+		clip history.Snapshot
+	}{"file-list", history.Snapshot{Formats: []history.Format{{ID: 15, Data: drop}}}})
+	dib := make([]byte, 40+16)
+	binary.LittleEndian.PutUint32(dib, 40)
+	binary.LittleEndian.PutUint32(dib[4:], 2)
+	binary.LittleEndian.PutUint32(dib[8:], 2)
+	binary.LittleEndian.PutUint16(dib[12:], 1)
+	binary.LittleEndian.PutUint16(dib[14:], 32)
+	binary.LittleEndian.PutUint32(dib[20:], 16)
+	copy(dib[40:], []byte{0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255})
+	cases = append(cases, struct {
+		name string
+		clip history.Snapshot
+	}{"dib-image", history.Snapshot{Formats: []history.Format{{ID: 8, Data: dib}}}})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			seq, err := Write(hwnd, tc.clip)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if seq == 0 {
+				t.Fatal("missing clipboard sequence")
+			}
+			got, _, err := Read(hwnd, 64<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range tc.clip.Formats {
+				found := false
+				for _, f := range got.Formats {
+					if (want.Name != "" && f.Name == want.Name) || (want.Name == "" && f.ID == want.ID) {
+						found = true
+						if !bytes.Equal(f.Data, want.Data) {
+							t.Errorf("format %s raw bytes changed: got %d want %d", history.FormatKey(want), len(f.Data), len(want.Data))
+						}
+					}
+				}
+				if !found {
+					t.Errorf("format missing: %s", history.FormatKey(want))
+				}
+			}
+		})
+	}
+	t.Run("excluded-by-source", func(t *testing.T) {
+		_, err := Write(hwnd, history.Snapshot{Formats: []history.Format{{ID: 13, Data: utf16Bytes("do not save")}, {Name: "CanIncludeInClipboardHistory", Data: []byte{0, 0, 0, 0}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err = Read(hwnd, 64<<20); !errors.Is(err, ErrExcluded) {
+			t.Fatal("source exclusion ignored", err)
+		}
+	})
+	t.Run("oversized-format-is-reported", func(t *testing.T) {
+		_, err := Write(hwnd, history.Snapshot{Formats: []history.Format{{Name: "KOL.Large", Data: make([]byte, 128)}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		clip, _, err := Read(hwnd, 16)
+		if err != nil || len(clip.Omitted) == 0 || len(clip.Formats) != 0 {
+			t.Fatal("oversized data was not reported", err)
+		}
+	})
+}
