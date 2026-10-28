@@ -23,6 +23,7 @@ type Snapshot struct {
 	Formats []Format `json:"formats"`
 	Omitted []string `json:"omitted,omitempty"`
 	Source  string   `json:"source,omitempty"`
+	Owner   uintptr  `json:"-"` // captured HWND, valid only for this live read
 }
 
 type Entry struct {

@@ -22,3 +22,8 @@ Generated reference: `docs/design/panel-concept.png`; standalone logo: `assets/l
 
 ## Validation
 Cross-platform unit tests for identity, whitespace, file metadata, persistence, encryption, deletion and pinning. Real Windows clipboard integration tests for round trips and custom registered formats. Linux and Windows build/tests, UI interaction checks in Playwright (Browser plugin unavailable), visual comparison with generated concept, Windows executable smoke test, and clean public-source audit before GitHub push.
+
+## User revision, 2026-10-28
+The live review asks for a more practical daily list: permanent trash beside pin controls, stable timestamp on hover, no visible information icon, smaller text rows with only the copied text, no size/copy-count/type subline, a large image preview below its label, and Ctrl+F for search. Information remains available via right-click. Details of partially captured formats belong there; only an entirely uncapturable copy or an operational failure warrants a notice in the daily panel. This revision supersedes the corresponding generated-concept details.
+
+Implementation floor is Go 1.26, required by the selected current dependencies. Native APIs pin the calling OS thread for the full clipboard lock; the listener suppresses its own writes using the owner captured while locked and retries transient contention without requiring another change notification.

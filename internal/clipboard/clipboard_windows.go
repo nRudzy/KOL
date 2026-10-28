@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unsafe"
@@ -54,6 +55,16 @@ func open(owner uintptr) error {
 		time.Sleep(time.Duration(8+i*4) * time.Millisecond)
 	}
 	return errors.New("le presse-papiers est occupé ; réessayez dans un instant")
+}
+
+// Win32's clipboard lock must be released on its opening OS thread.
+func acquireClipboard(owner uintptr) (func(), error) {
+	runtime.LockOSThread()
+	if err := open(owner); err != nil {
+		runtime.UnlockOSThread()
+		return nil, err
+	}
+	return func() { closeClipboard.Call(); runtime.UnlockOSThread() }, nil
 }
 
 func namedFormat(name string) (uint32, error) {
@@ -129,11 +140,13 @@ func Read(owner uintptr, maxBytes int64) (history.Snapshot, uint32, error) {
 
 func readOnce(owner uintptr, maxBytes int64) (history.Snapshot, uint32, error) {
 	var clip history.Snapshot
-	if err := open(owner); err != nil {
+	release, err := acquireClipboard(owner)
+	if err != nil {
 		return clip, 0, err
 	}
-	defer closeClipboard.Call()
+	defer release()
 	seq := Sequence()
+	clip.Owner, _, _ = user32.NewProc("GetClipboardOwner").Call()
 	var formats []uint32
 	for id := uint32(0); ; {
 		next, _, _ := enumFormats.Call(uintptr(id))
@@ -314,10 +327,11 @@ func Write(owner uintptr, clip history.Snapshot) (uint32, error) {
 	if len(items) == 0 {
 		return 0, errors.New("cette copie ne contient aucun format restituable")
 	}
-	if err := open(owner); err != nil {
+	release, err := acquireClipboard(owner)
+	if err != nil {
 		return 0, err
 	}
-	defer closeClipboard.Call()
+	defer release()
 	if ok, _, _ := emptyClipboard.Call(); ok == 0 {
 		return 0, errors.New("impossible de préparer le presse-papiers")
 	}

@@ -124,7 +124,11 @@ func SaveSettings(dir string, s Settings) error {
 	return windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 }
 
-func SetStartup(enabled bool) error {
+func startupCommand(exe, dir string) string {
+	return windows.ComposeCommandLine([]string{exe, "--background", "--data-dir", dir})
+}
+
+func SetStartup(enabled bool, dir string) error {
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.SET_VALUE)
 	if err != nil {
 		return err
@@ -141,5 +145,5 @@ func SetStartup(enabled bool) error {
 	if err != nil {
 		return err
 	}
-	return key.SetStringValue("KOL", `"`+exe+`" --background`)
+	return key.SetStringValue("KOL", startupCommand(exe, dir))
 }

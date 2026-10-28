@@ -50,7 +50,6 @@ func (a *app) bind(background bool) error {
 			}
 			a.clipMu.Lock()
 			_, err = clipboard.Write(a.hwnd, clip)
-			a.lastWritten.Store(clipboard.Sequence())
 			a.clipMu.Unlock()
 			if err != nil {
 				return err
@@ -76,7 +75,7 @@ func (a *app) bind(background bool) error {
 		"kolPin":    func(id string, pinned bool) error { return a.store.Pin(id, pinned) },
 		"kolDelete": a.store.Delete,
 		"kolClear":  a.store.Clear,
-		"kolPause":  func(paused bool) { a.mu.Lock(); a.paused = paused; a.mu.Unlock() },
+		"kolPause":  func(paused bool) { a.mu.Lock(); a.paused = paused; a.mu.Unlock(); a.signalCapture() },
 		"kolSettings": func(next platform.Settings) error {
 			if next.MaxItemMiB < 1 || next.MaxItemMiB > 512 {
 				return errors.New("choisissez une taille de 1 à 512 Mo")
@@ -84,11 +83,11 @@ func (a *app) bind(background bool) error {
 			a.mu.RLock()
 			previous := a.settings
 			a.mu.RUnlock()
-			if err := platform.SetStartup(next.StartAtLogin); err != nil {
+			if err := platform.SetStartup(next.StartAtLogin, a.dir); err != nil {
 				return err
 			}
 			if err := platform.SaveSettings(a.dir, next); err != nil {
-				_ = platform.SetStartup(previous.StartAtLogin)
+				_ = platform.SetStartup(previous.StartAtLogin, a.dir)
 				return err
 			}
 			a.mu.Lock()

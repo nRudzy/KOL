@@ -96,6 +96,12 @@ func (s *Store) Add(clip Snapshot, at time.Time) (Entry, error) {
 	e.Copies = 1
 	if exists {
 		e.FirstAt = old.FirstAt
+		if at.Before(e.FirstAt) {
+			e.FirstAt = at
+		}
+		if at.Before(old.LastAt) {
+			e.LastAt = old.LastAt
+		}
 		e.Copies = old.Copies + 1
 		e.Pinned = old.Pinned
 	}

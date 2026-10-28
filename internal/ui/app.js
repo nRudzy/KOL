@@ -45,16 +45,23 @@
       const row=document.createElement('article');row.className='entry'+(index===selected?' selected':'');row.dataset.id=entry.id;
       const main=document.createElement('button');main.className='item-copy';main.type='button';main.setAttribute('aria-label',`Recopier : ${entry.title}`);
       const thumb=document.createElement('span');thumb.className='thumb';
-      if(entry.kind==='image'&&/^data:image\/png;base64,/.test(entry.preview||'')){thumb.classList.add('image');const img=document.createElement('img');img.src=entry.preview;img.alt='Aperçu de l’image copiée';thumb.append(img);}else{thumb.innerHTML=icon(entry.kind);}
-      const content=document.createElement('span');content.className='copy-content';const title=document.createElement('span');title.className='copy-title';title.textContent=entry.title;const sub=document.createElement('span');sub.className='copy-excerpt';
-      const secondLine=(entry.text||'').split(/\r?\n/).slice(1).find(x=>x.trim());
-      sub.textContent=(entry.kind==='files'?`${entry.files?.length||0} fichier(s)`:secondLine||types[entry.kind]||'Données')+` · ${size(entry.size)}`+(entry.copies>1?` · ${entry.copies} copies`:'');
-      if(entry.omitted?.length){sub.textContent+=' · Capture partielle';sub.classList.add('partial-mark');}
-      content.append(title,sub);main.append(thumb,content);main.addEventListener('click',()=>copy(entry.id));
-      const actions=document.createElement('div');actions.className='row-actions';const time=document.createElement('span');time.className='row-time';time.textContent=new Date(entry.lastAt).toDateString()===new Date().toDateString()?clock(entry.lastAt):date(entry.lastAt);time.title=new Date(entry.lastAt).toLocaleString('fr-FR');actions.append(time);
+      thumb.innerHTML=icon(entry.kind);
+      const content=document.createElement('span');content.className='copy-content';const title=document.createElement('span');title.className='copy-title';title.textContent=entry.title;
+      content.append(title);
+      main.append(thumb,content);
+      if(entry.kind==='image'&&/^data:image\/png;base64,/.test(entry.preview||'')){
+        row.classList.add('image-entry'); main.classList.add('image-copy'); thumb.innerHTML=icon('image');thumb.classList.remove('image');
+        const heading=document.createElement('span');heading.className='image-heading';heading.append(thumb,content);
+        const image=document.createElement('img');image.className='image-preview';image.src=entry.preview;image.alt='Aperçu de l’image copiée';
+        main.replaceChildren(heading,image);
+      }
+      main.addEventListener('click',()=>copy(entry.id));
+      main.addEventListener('contextmenu',event=>{event.preventDefault();showDetail(entry.id);});
+      main.setAttribute('aria-description','Clic droit pour les informations de la copie');
+      const actions=document.createElement('div');actions.className='row-actions';const time=document.createElement('span');time.className='row-time';time.textContent=new Date(entry.lastAt).toDateString()===new Date().toDateString()?clock(entry.lastAt):date(entry.lastAt);time.title=new Date(entry.lastAt).toLocaleString('fr-FR');
       const button=(name,label,fn)=>{const b=document.createElement('button');b.className='row-button '+name;b.type='button';b.innerHTML=icon(name==='delete'?'trash':name);b.setAttribute('aria-label',label);b.title=label;b.addEventListener('click',fn);return b;};
       const pin=button('pin',entry.pinned?'Désépingler':'Épingler',()=>run(async()=>{await window.kolPin(entry.id,!entry.pinned);await refresh();}));pin.classList.toggle('pinned',entry.pinned);pin.setAttribute('aria-pressed',String(entry.pinned));
-      actions.append(pin,button('info','Voir le détail',()=>showDetail(entry.id)),button('delete','Supprimer cette copie',()=>run(async()=>{await window.kolDelete(entry.id);await refresh();})));
+      actions.append(button('delete','Supprimer cette copie',()=>run(async()=>{await window.kolDelete(entry.id);await refresh();})),pin,time);
       row.append(main,actions);row.addEventListener('mouseenter',()=>{selected=index;highlight(false);});fragment.append(row);
     });
     if(entries.length<current.matched){const more=document.createElement('button');more.className='load-more';more.textContent='Afficher la suite';more.addEventListener('click',()=>{limit+=200;refresh();});fragment.append(more);}
@@ -75,7 +82,7 @@
   $('quit').addEventListener('click',()=>run(()=>window.kolQuit()));
   $('detail-copy').addEventListener('click',()=>copy(detailId));
   document.addEventListener('keydown',event=>{
-    if(event.ctrlKey&&event.key.toLowerCase()==='k'){event.preventDefault();$('search').focus();$('search').select();return;}
+    if(event.ctrlKey&&event.key.toLowerCase()==='f'){event.preventDefault();$('search').focus();$('search').select();return;}
     if(document.querySelector('dialog[open]'))return;
     if(event.key==='Escape'){event.preventDefault();run(()=>window.kolHide());return;}
     if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();selected=Math.max(0,Math.min(entries.length-1,selected+(event.key==='ArrowDown'?1:-1)));highlight();return;}

@@ -13,7 +13,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	webview "github.com/jchv/go-webview2"
 	"github.com/nRudzy/KOL/internal/clipboard"
@@ -37,7 +36,6 @@ type app struct {
 	hotkey, trayV4, menuOpen                     bool
 	deactivatedAt                                time.Time
 	closing                                      atomic.Bool
-	lastWritten                                  atomic.Uint32
 	signals                                      chan struct{}
 	stop, done                                   chan struct{}
 }
@@ -67,10 +65,7 @@ func Run(version, dataDir string, background bool) error {
 		if mutex != 0 {
 			windows.CloseHandle(mutex)
 		}
-		hwnd, _, _ := user.NewProc("FindWindowW").Call(0, uintptr(unsafe.Pointer(utf("KOL — Presse-papiers"))))
-		if hwnd != 0 {
-			postMessage.Call(hwnd, uintptr(registerMessage("KOL.ShowPanel.v1")), 0, 0)
-		}
+		postMessage.Call(0xffff, uintptr(registerMessage(fmt.Sprintf("KOL.ShowPanel.v1.%x", hash[:16]))), 0, 0)
 		return nil
 	}
 	if err != nil {
@@ -91,11 +86,11 @@ func Run(version, dataDir string, background bool) error {
 		return fmt.Errorf("lire les préférences : %w", err)
 	}
 	if settings.StartAtLogin {
-		if err = platform.SetStartup(true); err != nil {
+		if err = platform.SetStartup(true, dataDir); err != nil {
 			return fmt.Errorf("démarrage Windows : %w", err)
 		}
 	}
-	a := &app{dir: dataDir, version: version, settings: settings, store: store, signals: make(chan struct{}, 32), stop: make(chan struct{}), done: make(chan struct{})}
+	a := &app{dir: dataDir, version: version, settings: settings, store: store, signals: make(chan struct{}, 32), stop: make(chan struct{}), done: make(chan struct{}), showMessage: registerMessage(fmt.Sprintf("KOL.ShowPanel.v1.%x", hash[:16]))}
 	a.web = webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(dataDir, "WebView2"), AutoFocus: true, WindowOptions: webview.WindowOptions{Title: "KOL — Presse-papiers", Width: 440, Height: 680, IconId: 1}})
 	if a.web == nil {
 		return errors.New("le moteur Microsoft Edge WebView2 est nécessaire ; installez le WebView2 Evergreen Runtime puis relancez KOL")
@@ -144,12 +139,20 @@ func (a *app) notify() {
 func (a *app) captureLoop() {
 	defer close(a.done)
 	var lastSeen uint32
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	defer timer.Stop()
+	var retry <-chan time.Time
+	retryDelay := 250 * time.Millisecond
+	scheduleRetry := func() { timer.Reset(retryDelay); retry = timer.C; retryDelay = min(2*time.Second, retryDelay*2) }
 	for {
 		select {
 		case <-a.stop:
 			return
 		case <-a.signals:
+		case <-retry:
 		}
+		retry = nil
 		a.mu.RLock()
 		paused := a.paused
 		maxBytes := int64(a.settings.MaxItemMiB) << 20
@@ -159,37 +162,50 @@ func (a *app) captureLoop() {
 		}
 		a.clipMu.Lock()
 		seq := clipboard.Sequence()
-		if seq == lastSeen || seq == a.lastWritten.Load() {
+		if seq == lastSeen {
 			a.clipMu.Unlock()
 			continue
 		}
 		clip, captured, err := clipboard.Read(a.hwnd, maxBytes)
-		if err == nil {
-			lastSeen = captured
-		}
+		capturedAt := time.Now()
 		a.clipMu.Unlock()
 		if errors.Is(err, clipboard.ErrExcluded) {
 			lastSeen = seq
+			retryDelay = 250 * time.Millisecond
 			continue
 		}
 		if err != nil {
 			a.setError(err.Error())
+			scheduleRetry()
+			continue
+		}
+		// Observe ownership while locked; sequence numbers can change on close.
+		if clip.Owner == a.hwnd {
+			lastSeen = captured
+			retryDelay = 250 * time.Millisecond
+			continue
+		}
+		a.mu.RLock()
+		paused = a.paused
+		a.mu.RUnlock()
+		if paused {
 			continue
 		}
 		if len(clip.Formats) == 0 {
+			lastSeen = captured
 			if len(clip.Omitted) > 0 {
-				a.setError("Cette copie ne peut pas être conservée : " + strings.Join(clip.Omitted, " ; "))
+				a.setError("Cette copie ne peut pas être conservée. Essayez de copier son texte ou son image.")
 			}
 			continue
 		}
-		if _, err = a.store.Add(clip, time.Now()); err != nil {
+		if _, err = a.store.Add(clip, capturedAt); err != nil {
 			a.setError("Enregistrement impossible : " + err.Error())
+			scheduleRetry()
 			continue
 		}
-		message := ""
-		if len(clip.Omitted) > 0 {
-			message = "Copie partielle : certains formats propres à l’application ou trop volumineux n’ont pas été conservés. Consultez le détail de la copie."
-		}
-		a.setError(message)
+		lastSeen = captured
+		retryDelay = 250 * time.Millisecond
+		// Optional information retains unsupported formats without cluttering the list.
+		a.setError("")
 	}
 }

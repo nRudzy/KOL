@@ -19,11 +19,11 @@ Windows 10/11 **64 bits**, avec [Microsoft Edge WebView2 Evergreen Runtime](http
 | Copier dans n’importe quelle application | Ajoute une copie locale, avec ses formats disponibles |
 | Recopier un contenu identique | Remonte la même entrée et augmente son compteur |
 | Clic gauche sur l’icône / **Ctrl+Alt+V** | Ouvre ou masque le panneau |
-| Recherche / **Ctrl+K** | Retrouve texte, lien, nom de fichier, format ou application source |
+| Recherche / **Ctrl+F** | Retrouve texte, lien, nom de fichier, format ou application source |
 | Clic sur une copie / **Entrée** | La remet dans le presse-papiers ; **Ctrl+V** la colle ensuite |
 | Flèches haut et bas | Sélectionnent une copie dans la liste |
 | Épingle | Garde les copies utiles à portée de main |
-| Bouton de détail | Affiche le texte brut, les formats et les limites éventuelles |
+| Clic droit sur une copie | Affiche le texte brut, les formats et les limites éventuelles |
 | **Échap** / clic à l’extérieur | Masque le panneau ; KOL continue à capturer |
 | Pause | Suspend la capture ; la consultation reste disponible |
 | Clic droit sur l’icône | Ouvre le menu, permet de mettre en pause ou de quitter |

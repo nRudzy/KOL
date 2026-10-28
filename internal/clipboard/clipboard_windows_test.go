@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"testing"
 	"unicode/utf16"
-	"unsafe"
 
 	"github.com/nRudzy/KOL/internal/history"
+	"github.com/nRudzy/KOL/internal/wintest"
 	"golang.org/x/sys/windows"
 )
 
@@ -27,40 +27,8 @@ func utf16Bytes(s string) []byte {
 // A separate window station owns a separate clipboard. Never replace the user's
 // live clipboard merely to test capture/restore, including on developer machines.
 func TestWindowsClipboardRoundTrip(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	user := windows.NewLazySystemDLL("user32.dll")
-	oldStation, _, _ := user.NewProc("GetProcessWindowStation").Call()
-	threadID := windows.GetCurrentThreadId()
-	oldDesktop, _, _ := user.NewProc("GetThreadDesktop").Call(uintptr(threadID))
-	// Named stations require administrator rights; an unnamed station gets a
-	// logon-session name and can be created by a regular Windows user.
-	station, _, err := user.NewProc("CreateWindowStationW").Call(0, 0, 0x000f037f, 0)
-	if station == 0 {
-		t.Fatal("create isolated clipboard station:", err)
-	}
-	defer user.NewProc("CloseWindowStation").Call(station)
-	if ok, _, err := user.NewProc("SetProcessWindowStation").Call(station); ok == 0 {
-		t.Fatal(err)
-	}
-	defer user.NewProc("SetProcessWindowStation").Call(oldStation)
-	desktopName, _ := windows.UTF16PtrFromString("KOLClipboardTests")
-	desktop, _, err := user.NewProc("CreateDesktopW").Call(uintptr(unsafe.Pointer(desktopName)), 0, 0, 0, 0x000f01ff, 0)
-	if desktop == 0 {
-		t.Fatal("create isolated desktop:", err)
-	}
-	defer user.NewProc("CloseDesktop").Call(desktop)
-	if ok, _, err := user.NewProc("SetThreadDesktop").Call(desktop); ok == 0 {
-		t.Fatal(err)
-	}
-	defer user.NewProc("SetThreadDesktop").Call(oldDesktop)
-	class, _ := windows.UTF16PtrFromString("STATIC")
-	name, _ := windows.UTF16PtrFromString("KOL integration tests")
-	hwnd, _, err := user.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, 0, 0, 0)
-	if hwnd == 0 {
-		t.Fatal(err)
-	}
-	defer user.NewProc("DestroyWindow").Call(hwnd)
+	wintest.IsolateClipboard(t)
+	hwnd := wintest.Window(t)
 	cases := []struct {
 		name string
 		clip history.Snapshot
@@ -117,6 +85,20 @@ func TestWindowsClipboardRoundTrip(t *testing.T) {
 			}
 		})
 	}
+	t.Run("session-stays-on-opening-thread", func(t *testing.T) {
+		release, err := acquireClipboard(0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer release()
+		thread := windows.GetCurrentThreadId()
+		for i := 0; i < 2000; i++ {
+			runtime.Gosched()
+			if windows.GetCurrentThreadId() != thread {
+				t.Fatal("clipboard session migrated to another OS thread")
+			}
+		}
+	})
 	t.Run("excluded-by-source", func(t *testing.T) {
 		_, err := Write(hwnd, history.Snapshot{Formats: []history.Format{{ID: 13, Data: utf16Bytes("do not save")}, {Name: "CanIncludeInClipboardHistory", Data: []byte{0, 0, 0, 0}}}})
 		if err != nil {

@@ -69,7 +69,6 @@ func (a *app) configureWindow() error {
 	border := uint32(0x00e8e3dc)
 	dwm.NewProc("DwmSetWindowAttribute").Call(a.hwnd, 34, uintptr(unsafe.Pointer(&border)), 4)
 	a.taskbarMessage = registerMessage("TaskbarCreated")
-	a.showMessage = registerMessage("KOL.ShowPanel.v1")
 	if ok, _, err := user.NewProc("AddClipboardFormatListener").Call(a.hwnd); ok == 0 {
 		return err
 	}
@@ -298,6 +297,7 @@ func (a *app) trayMenu() {
 		a.mu.Lock()
 		a.paused = !a.paused
 		a.mu.Unlock()
+		a.signalCapture()
 		a.notify()
 	case 3:
 		a.quit()

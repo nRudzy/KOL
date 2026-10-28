@@ -168,8 +168,8 @@ func thumbnail(data []byte) string {
 		return ""
 	}
 	w, h := config.Width, config.Height
-	if w > 320 || h > 240 {
-		scale := min(320.0/float64(w), 240.0/float64(h))
+	if w > 640 || h > 480 {
+		scale := min(640.0/float64(w), 480.0/float64(h))
 		w = max(1, int(float64(w)*scale))
 		h = max(1, int(float64(h)*scale))
 	}

@@ -4,10 +4,21 @@ package platform
 
 import (
 	"bytes"
+	"golang.org/x/sys/windows"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestStartupCommandPreservesSelectedDataDirectory(t *testing.T) {
+	exe := `C:\Program Files\KOL\KOL.exe`
+	dir := `D:\Mes copies\épingles`
+	args, err := windows.DecomposeCommandLine(startupCommand(exe, dir))
+	if err != nil || !reflect.DeepEqual(args, []string{exe, "--background", "--data-dir", dir}) {
+		t.Fatalf("startup arguments changed: %q (%v)", args, err)
+	}
+}
 
 func TestDPAPIKeyPersistenceAndMissingKey(t *testing.T) {
 	dir := t.TempDir()

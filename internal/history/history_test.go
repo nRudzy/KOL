@@ -204,6 +204,17 @@ func TestConcurrentCopiesAndSearch(t *testing.T) {
 	}
 }
 
+func TestLateCaptureCannotMoveNewerCopyBackInTime(t *testing.T) {
+	s, _, _ := openTest(t)
+	e, _ := s.Add(textClip("first"), time.Unix(20, 0))
+	_, _ = s.Add(textClip("other"), time.Unix(15, 0))
+	_, _ = s.Add(textClip("first"), time.Unix(10, 0))
+	list := s.List("", "all")
+	if list[0].ID != e.ID || list[0].LastAt.Unix() != 20 || list[0].FirstAt.Unix() != 10 || list[0].Copies != 2 {
+		t.Fatalf("late capture changed recency incorrectly: %+v", list)
+	}
+}
+
 func TestFileListPreviewAndLinkClassification(t *testing.T) {
 	u := textClip("C:\\Images\\photo.png\x00C:\\Docs\\idée.txt\x00").Formats[0].Data
 	drop := make([]byte, 20)
