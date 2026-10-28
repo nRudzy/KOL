@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][string]$InstallerPath)
+﻿param([Parameter(Mandatory = $true)][string]$InstallerPath)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
   throw 'Ce test installe puis désinstalle KOL : il est réservé au runner Windows jetable de la CI.'
@@ -23,12 +23,12 @@ function Invoke-KolSetup([string]$TaskArgument = '') {
   $kolProcess = Start-Process -FilePath $InstallerPath -ArgumentList $kolArguments -Wait -PassThru
   if ($kolProcess.ExitCode -ne 0) {
     Get-Content $kolLog -Tail 50
-    throw "L’installation a échoué : $($kolProcess.ExitCode)"
+    throw "L''installation a échoué : $($kolProcess.ExitCode)"
   }
 }
 function Assert-KolDataPreserved {
-  if ((Get-FileHash (Join-Path $kolData 'history.db')).Hash -ne $kolBeforeDB) { throw 'Historique modifié par l’installation.' }
-  if ((Get-FileHash (Join-Path $kolData 'history.key')).Hash -ne $kolBeforeKey) { throw 'Clé modifiée par l’installation.' }
+  if ((Get-FileHash (Join-Path $kolData 'history.db')).Hash -ne $kolBeforeDB) { throw 'Historique modifié par l''installation.' }
+  if ((Get-FileHash (Join-Path $kolData 'history.key')).Hash -ne $kolBeforeKey) { throw 'Clé modifiée par l''installation.' }
   $kolSettings = Get-Content (Join-Path $kolData 'settings.json') -Raw | ConvertFrom-Json
   if ($kolSettings.maxItemMiB -ne 512) { throw 'Préférences perdues.' }
 }
@@ -44,9 +44,52 @@ if (-not $kolStartup.StartsWith('"' + (Join-Path $kolApp 'KOL.exe') + '"')) { th
 if ((Get-Content (Join-Path $kolData 'settings.json') -Raw | ConvertFrom-Json).startAtLogin -ne $true) { throw 'Préférence de démarrage non synchronisée.' }
 Assert-KolDataPreserved
 
+# Opening the uninstaller and cancelling must not disable a retained app.
+Add-Type @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class KolInstallerConfirmation {
+  private delegate bool EnumProc(IntPtr window, IntPtr unused);
+  [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr unused);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr window, StringBuilder text, int count);
+  [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr window, int id);
+  [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
+  public static bool Cancel() {
+    bool result = false;
+    EnumWindows((window, unused) => {
+      var title = new StringBuilder(256); var kind = new StringBuilder(64);
+      GetWindowText(window, title, title.Capacity); GetClassName(window, kind, kind.Capacity);
+      if (title.ToString().IndexOf("KOL", StringComparison.OrdinalIgnoreCase) < 0 || kind.ToString() != "#32770") return true;
+      var no = GetDlgItem(window, 7); if (no == IntPtr.Zero) return true;
+      result = PostMessage(window, 0x111, (IntPtr)7, no); return false;
+    }, IntPtr.Zero);
+    return result;
+  }
+}
+'@
+$kolCancelProcess = Start-Process -FilePath (Join-Path $kolApp 'unins000.exe') -PassThru
+$kolCancelled = $false
+$kolUntil = [DateTime]::UtcNow.AddSeconds(20)
+while ([DateTime]::UtcNow -lt $kolUntil) {
+  if ([KolInstallerConfirmation]::Cancel()) { $kolCancelled = $true; break }
+  Start-Sleep -Milliseconds 100
+}
+if (-not $kolCancelled) { throw 'Confirmation de désinstallation introuvable.' }
+if (-not $kolCancelProcess.WaitForExit(10000)) { throw 'Annulation de désinstallation bloquée.' }
+if (-not (Test-Path $kolUninstallKey)) { throw 'Installation supprimée malgré une annulation.' }
+if ((Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue) -ne $kolStartup) { throw 'Une annulation a changé le démarrage automatique.' }
+if (-not (Get-Content (Join-Path $kolData 'settings.json') -Raw | ConvertFrom-Json).startAtLogin) { throw 'Une annulation a désactivé le démarrage.' }
+Assert-KolDataPreserved
+
 # Upgrade without explicit tasks must retain the user's enabled startup choice.
 Invoke-KolSetup
 if (-not (Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue)) { throw 'Démarrage perdu lors de la mise à jour.' }
+Assert-KolDataPreserved
+
+Invoke-KolSetup '/MERGETASKS=desktopicon'
+if (-not (Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue)) { throw 'Un autre raccourci a désactivé le démarrage.' }
 Assert-KolDataPreserved
 
 # Emulate the user turning startup off in KOL, then update again.

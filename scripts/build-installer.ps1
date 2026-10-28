@@ -1,4 +1,4 @@
-param(
+﻿param(
   [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.0',
   [string]$CompilerPath = '',
   [switch]$SkipAppBuild
@@ -22,8 +22,8 @@ try {
       if (Test-Path $kolCandidate) { $CompilerPath = $kolCandidate; break }
     }
   }
-  if (-not $CompilerPath) { throw 'Inno Setup 6.7 ou plus récent est nécessaire pour créer l’installateur.' }
+  if (-not $CompilerPath) { throw 'Inno Setup 6.7 ou plus récent est nécessaire pour créer l''installateur.' }
   & $CompilerPath "/DAppVersion=$Version" "/O$kolRoot\dist" 'installer\KOL.iss'
-  if ($LASTEXITCODE -ne 0) { throw 'Création de l’installateur KOL impossible.' }
+  if ($LASTEXITCODE -ne 0) { throw 'Création de l''installateur KOL impossible.' }
   Write-Output "Installateur créé : $kolRoot\dist\KOL-Setup-$Version.exe"
 } finally { Pop-Location }
