@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>KOL — Le fil de vos copies</title>
+  <style>/*__KOL_STYLE__*/</style>
+</head>
+<body>
+<main class="app">
+  <header class="header">
+    <div class="brand"><img src="__KOL_LOGO__" alt="" width="42" height="42"><div><h1>KOL</h1><p>Le fil de vos copies.</p></div></div>
+    <div class="header-actions"><button id="pause" class="icon-button" aria-label="Mettre la capture en pause" title="Mettre la capture en pause" data-icon="pause"></button><button id="settings-open" class="icon-button" aria-label="Paramètres" title="Paramètres" data-icon="settings"></button></div>
+  </header>
+  <div class="search-wrap"><span data-icon="search" aria-hidden="true"></span><input id="search" type="search" placeholder="Rechercher une copie…" aria-label="Rechercher dans l’historique" autocomplete="off" spellcheck="false"><kbd>Ctrl K</kbd></div>
+  <nav class="filters" aria-label="Filtrer les copies"><button data-filter="all" aria-pressed="true">Tout</button><button data-filter="text" aria-pressed="false">Texte</button><button data-filter="image" aria-pressed="false">Images</button><button data-filter="files" aria-pressed="false">Fichiers</button><button data-filter="pinned" aria-pressed="false">Épinglés</button></nav>
+  <div id="notice" class="notice" role="status" hidden></div>
+  <div class="list-heading"><h2 id="list-title">VOS COPIES</h2><span id="count">Chargement…</span></div>
+  <section id="history" class="history" aria-label="Historique des copies" aria-busy="true"><div class="empty"><div class="empty-symbol" data-icon="stack"></div><h3>Un instant…</h3><p>Votre historique arrive.</p></div></section>
+  <footer class="footer"><div class="status-line"><span id="status"><span class="dot"></span><span id="status-text">Capture active</span></span><span class="local-note">Tout reste sur cet appareil.</span></div><div class="keyboard-help"><span><kbd>Entrée</kbd> pour recopier</span><span><kbd>Échap</kbd> pour fermer</span></div></footer>
+</main>
+<div id="toast" class="toast" role="status" hidden></div>
+<dialog id="settings-dialog" aria-labelledby="settings-title">
+  <div class="dialog-header"><div><p class="eyebrow">À VOTRE FAÇON</p><h2 id="settings-title">Paramètres</h2></div><button class="icon-button" data-close="settings-dialog" aria-label="Fermer les paramètres" data-icon="close"></button></div>
+  <label class="setting-line"><span><strong>Démarrer avec Windows</strong><small>KOL vous attend près de l’horloge.</small></span><input type="checkbox" id="startup" role="switch"></label>
+  <label class="setting-line"><span><strong>Taille maximale par copie</strong><small>Les formats trop volumineux sont signalés.</small></span><select id="max-size" aria-label="Taille maximale en mégaoctets"><option value="16">16 Mo</option><option value="32">32 Mo</option><option value="64">64 Mo</option><option value="128">128 Mo</option><option value="256">256 Mo</option><option value="512">512 Mo</option></select></label>
+  <div class="setting-info"><span data-icon="shield" aria-hidden="true"></span><p>Historique local et chiffré, sans limite de durée. Les espaces et la mise en forme sont conservés. Les copies exclues par leur application ne sont pas enregistrées.</p></div>
+  <p class="setting-note">Raccourci global : <kbd>Ctrl Alt V</kbd><br>Les fichiers restent à leur emplacement d’origine.</p>
+  <button id="clear-open" class="wide-button danger-outline">Effacer l’historique non épinglé</button>
+  <div class="dialog-bottom"><button id="quit" class="text-button">Quitter KOL</button><button id="settings-save" class="primary-button">Enregistrer</button></div><p id="version" class="version"></p>
+</dialog>
+<dialog id="clear-dialog" aria-labelledby="clear-title"><div class="dialog-header"><h2 id="clear-title">Faire place nette ?</h2><button class="icon-button" data-close="clear-dialog" aria-label="Annuler" data-icon="close"></button></div><p class="dialog-description">Toutes les copies non épinglées seront supprimées de KOL. Vos éléments épinglés restent disponibles.</p><div class="dialog-bottom"><button class="text-button" data-close="clear-dialog">Annuler</button><button id="clear-confirm" class="primary-button danger">Effacer</button></div></dialog>
+<dialog id="detail-dialog" aria-labelledby="detail-title"><div class="dialog-header"><h2 id="detail-title">Détail de la copie</h2><button class="icon-button" data-close="detail-dialog" aria-label="Fermer le détail" data-icon="close"></button></div><pre id="detail-text"></pre><p id="detail-meta" class="setting-note"></p><p id="detail-omitted" class="notice" hidden></p><button id="detail-copy" class="primary-button wide-button">Recopier à l’identique</button></dialog>
+<script>/*__KOL_SCRIPT__*/</script>
+</body>
+</html>
