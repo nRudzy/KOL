@@ -64,6 +64,7 @@ Filename: "{app}\KOL.exe"; Parameters: "--data-dir {code:QuotedDataDir}"; Descri
 var
   SelectedDataDir: String;
   ConfigurationFailed: Boolean;
+  StartupTaskInitialized: Boolean;
 
 function GetDataDir(Param: String): String;
 begin
@@ -109,11 +110,15 @@ begin
   end;
 end;
 
-procedure InitializeWizard;
+procedure CurPageChanged(CurPageID: Integer);
 begin
-  if not ExplicitTaskSelection and
-     RegValueExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'KOL') then
-    WizardSelectTasks('startup');
+  { TasksList is populated when this page is entered, not at InitializeWizard. }
+  if (CurPageID = wpSelectTasks) and not StartupTaskInitialized then begin
+    StartupTaskInitialized := True;
+    if not ExplicitTaskSelection and
+       RegValueExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'KOL') then
+      WizardSelectTasks('startup');
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
