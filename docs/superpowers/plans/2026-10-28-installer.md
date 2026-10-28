@@ -25,15 +25,15 @@
 
 ### Task 1: Native installation lifecycle
 **Files:** `internal/platform/startup_windows.go`, `internal/platform/platform_windows_test.go`, `internal/desktop/lifecycle_windows.go`, `internal/desktop/app_windows_test.go`, `cmd/kol/main_windows.go`.
-- [ ] Write failing tests for registered local executable preference, network startup refusal, and preserving the item limit while changing startup.
-- [ ] Implement `ConfigureStartup(dir,mode string)error`, `chooseStartupExecutable(current,registered string)(string,error)` and headless `--quit`, `--configure-startup=enable|disable` commands.
-- [ ] Add native app-window identification and graceful shutdown compatibility with v0.1.0.
-- [ ] Run native tests, Go vet and existing portable suite; commit verified implementation.
+- [x] Write failing tests for registered local executable preference, network startup refusal, and preserving the item limit while changing startup.
+- [x] Implement `ConfigureStartup(dir,mode string)error`, `chooseStartupExecutable(current,registered string)(string,error)` and headless `--quit`, `--configure-startup=enable|disable` commands.
+- [x] Add native app-window identification and graceful shutdown compatibility with v0.1.0.
+- [x] Run native tests, Go vet and existing portable suite; commit verified implementation.
 
 ### Task 2: Installer and distribution
 **Files:** `installer/KOL.iss`, `scripts/build-installer.ps1`, `scripts/test-installer.ps1`, `.github/workflows/ci.yml`, `README.md`, version defaults.
-- [ ] Create per-user French installer, safe preinstall shutdown, optional tasks, App Paths, shortcuts and uninstaller preserving data.
-- [ ] Add installer build and real lifecycle smoke test in Windows CI with disposable history/key/config.
-- [ ] Verify first install, update, disabling startup and uninstall; keep portable ZIP and add checksum-covered installer release asset.
-- [ ] Fresh reviewer checks lifecycle/ownership/data handling; fix material issues and rerun relevant tests.
-- [ ] Publish v0.2.0, verify downloaded artifacts, apply installation locally with preserved preferences and confirm Windows registration.
+- [x] Create per-user French installer, safe preinstall shutdown, optional tasks, App Paths, shortcuts and uninstaller preserving data.
+- [x] Add installer build and real lifecycle smoke test in Windows CI with disposable history/key/config.
+- [x] Verify first install, update, disabling startup and uninstall; keep portable ZIP and add checksum-covered installer release asset.
+- [x] Fresh reviewer checks lifecycle/ownership/data handling; fix material issues and rerun relevant tests.
+- [x] Publish v0.2.0, verify downloaded artifacts, apply installation locally with preserved preferences and confirm Windows registration.
