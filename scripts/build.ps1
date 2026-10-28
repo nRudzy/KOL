@@ -1,4 +1,4 @@
-param([ValidatePattern('^[a-zA-Z0-9._-]+$')][string]$Version = '0.1.0')
+param([ValidatePattern('^[a-zA-Z0-9._-]+$')][string]$Version = '0.2.0')
 $ErrorActionPreference = 'Stop'
 $kolRoot = Split-Path $PSScriptRoot -Parent
 $kolPreviousGoOS = $env:GOOS

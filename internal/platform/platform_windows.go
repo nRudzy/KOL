@@ -145,5 +145,13 @@ func SetStartup(enabled bool, dir string) error {
 	if err != nil {
 		return err
 	}
+	registered, err := registeredExecutable()
+	if err != nil {
+		return err
+	}
+	exe, err = chooseStartupExecutable(exe, registered)
+	if err != nil {
+		return err
+	}
 	return key.SetStringValue("KOL", startupCommand(exe, dir))
 }

@@ -20,6 +20,78 @@ func TestStartupCommandPreservesSelectedDataDirectory(t *testing.T) {
 	}
 }
 
+func TestStartupUsesRegisteredInstallationInsteadOfNetworkPortable(t *testing.T) {
+	installed := filepath.Join(t.TempDir(), "KOL.exe")
+	if err := os.WriteFile(installed, []byte("installed executable"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, current := range []string{`\\wsl.localhost\Ubuntu\home\user\KOL.exe`, `C:\Downloads\KOL.exe`} {
+		got, err := chooseStartupExecutable(current, installed)
+		if err != nil || got != installed {
+			t.Fatalf("installation must win: %q %v", got, err)
+		}
+	}
+}
+
+func TestNetworkExecutableCannotBeRegisteredForStartup(t *testing.T) {
+	for _, path := range []string{`\\wsl.localhost\Ubuntu\home\user\KOL.exe`, `\\server\share\KOL.exe`, `//server/share/KOL.exe`, `KOL.exe`} {
+		if _, err := chooseStartupExecutable(path, ""); err == nil {
+			t.Fatalf("unsafe startup location accepted: %q", path)
+		}
+	}
+	local := `C:\Users\Person\Applications\KOL.exe`
+	if got, err := chooseStartupExecutable(local, `C:\missing\KOL.exe`); err != nil || got != local {
+		t.Fatalf("local portable fallback failed: %q %v", got, err)
+	}
+}
+
+func TestConfigureStartupPreservesOtherSettingsAndHistory(t *testing.T) {
+	dir := t.TempDir()
+	original := Settings{MaxItemMiB: 512, StartAtLogin: false}
+	if err := SaveSettings(dir, original); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"history.db", "history.key"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("untouched data"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var calls []bool
+	apply := func(enabled bool, dataDir string) error {
+		if dataDir != dir {
+			t.Fatal("wrong data directory")
+		}
+		calls = append(calls, enabled)
+		return nil
+	}
+	if err := configureStartup(dir, "enable", apply); err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSettings(dir)
+	if err != nil || !s.StartAtLogin || s.MaxItemMiB != 512 {
+		t.Fatal("preferences changed", s, err)
+	}
+	if err = configureStartup(dir, "disable", apply); err != nil {
+		t.Fatal(err)
+	}
+	s, err = LoadSettings(dir)
+	if err != nil || s.StartAtLogin || s.MaxItemMiB != 512 {
+		t.Fatal("preferences changed", s, err)
+	}
+	if !reflect.DeepEqual(calls, []bool{true, false}) {
+		t.Fatal("startup changes not applied", calls)
+	}
+	if err = configureStartup(dir, "invalid", apply); err == nil {
+		t.Fatal("invalid mode accepted")
+	}
+	for _, name := range []string{"history.db", "history.key"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(b) != "untouched data" {
+			t.Fatal("history was changed", name, err)
+		}
+	}
+}
+
 func TestDPAPIKeyPersistenceAndMissingKey(t *testing.T) {
 	dir := t.TempDir()
 	key, err := LoadKey(dir)

@@ -6,11 +6,17 @@ KOL retient ce que vous copiez et le retrouve au moment où vous en avez besoin.
 
 ## Installer
 
-1. Téléchargez **KOL-windows-amd64.zip** depuis les [versions disponibles](https://github.com/nRudzy/KOL/releases/latest).
-2. Décompressez le dossier à un emplacement permanent, puis lancez **KOL.exe**.
-3. Pour le retrouver, cliquez sur son icône dans la zone de notification Windows, éventuellement sous la flèche des icônes masquées.
+1. Téléchargez **KOL-Setup-0.2.0.exe** depuis les [versions disponibles](https://github.com/nRudzy/KOL/releases/latest).
+2. Lancez l’installateur et choisissez si KOL doit démarrer avec Windows. L’installation concerne votre compte et ne demande pas de droits administrateur.
+3. Ouvrez **KOL** depuis le menu Démarrer ou son icône près de l’horloge, éventuellement sous la flèche des icônes masquées.
 
-Windows 10/11 **64 bits**, avec [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/), généralement déjà installé. KOL est portable : aucun serveur ni compte à configurer. L’exécutable initial est non signé.
+Windows 10/11 **64 bits**, avec [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/), généralement déjà installé. Aucun serveur ni compte à configurer.
+
+KOL apparaît dans **Paramètres Windows → Applications → Applications installées**, avec son désinstallateur. Les mises à jour s’installent par-dessus la version existante. Les fichiers de l’application restent dans `%LOCALAPPDATA%\Programs\KOL` ; l’historique est conservé séparément dans `%LOCALAPPDATA%\KOL`, y compris après désinstallation.
+
+L’installateur et KOL sont actuellement **non signés numériquement**. Windows peut donc encore afficher un avertissement sur l’éditeur lors du téléchargement ou du premier lancement. L’installation ne désactive aucun contrôle Windows. Elle place l’application dans un dossier local fixe et relie le démarrage à cette copie, même si une version portable est ensuite ouverte depuis un autre emplacement. KOL refuse d’ajouter un exécutable réseau/WSL au démarrage lorsqu’aucune installation locale enregistrée n’est disponible.
+
+Une **version portable ZIP** reste disponible pour ceux qui préfèrent décompresser et lancer `KOL.exe` sans installation. Dans ce cas, utilisez un dossier Windows local permanent.
 
 ## Au quotidien
 
@@ -48,6 +54,8 @@ KOL n’utilise aucun service cloud, aucune télémétrie applicative et aucune 
 
 Pour arrêter KOL, utilisez **Quitter KOL**, et désactivez d’abord le démarrage automatique si vous ne souhaitez plus l’utiliser. Les préférences sont dans `settings.json`. Le dossier `WebView2` contient les données de fonctionnement du moteur d’affichage. Le dossier de données peut être choisi au lancement avec `KOL.exe --data-dir "D:\KOL-data"` ; la clé reste liée au compte Windows.
 
+La désinstallation Windows quitte KOL proprement et désactive son démarrage automatique. Elle garde l’historique, sa clé et les autres préférences pour une éventuelle réinstallation.
+
 ## Développer
 
 Go **1.26 ou plus récent**. L’application est écrite en Go avec les API Win32, bbolt et WebView2. Le panneau utilise du HTML/CSS/JavaScript embarqué ; aucun environnement Node ni installation de Chromium n’est nécessaire pour compiler ou utiliser KOL.
@@ -69,6 +77,8 @@ go vet ./...
 ```
 
 L’exécutable est produit dans **`dist/KOL.exe`**, avec son icône et son manifeste Windows. La génération des ressources utilise `rsrc` à une version fixée et fonctionne sans compilateur C. Pour vérifier les accès concurrents au stockage : `go test -race ./...` (nécessite un compilateur C).
+
+Pour créer l’installateur, installez [Inno Setup 6.7 ou plus récent](https://jrsoftware.org/isdl.php), puis lancez `./scripts/build-installer.ps1` sous Windows. Le fichier produit est `dist/KOL-Setup-0.2.0.exe`. La CI compile et teste une vraie installation, sa mise à jour et sa désinstallation dans un dossier jetable ; ce test refuse de s’exécuter sur un poste utilisateur.
 
 Les tests Windows exercent de vrais échanges du presse-papiers dans une station de fenêtres isolée, ainsi que DPAPI et les préférences. Ils ne remplacent pas le presse-papiers de votre session. Les tests portables couvrent conservation des espaces, dédoublonnage, ordre, recherche, chiffrement, persistance, épingles et suppressions. La CI vérifie Linux et Windows, puis construit le binaire Windows.
 

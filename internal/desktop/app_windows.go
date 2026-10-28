@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	webview "github.com/jchv/go-webview2"
 	"github.com/nRudzy/KOL/internal/clipboard"
@@ -105,6 +106,7 @@ func Run(version, dataDir string, background bool) error {
 		user.NewProc("UnregisterHotKey").Call(a.hwnd, 1)
 		a.removeTray()
 		a.closing.Store(true)
+		user.NewProc("RemovePropW").Call(a.hwnd, uintptr(unsafe.Pointer(utf(appWindowProperty))))
 		user.NewProc("DestroyWindow").Call(a.hwnd)
 	}()
 	if err = a.bind(background); err != nil {

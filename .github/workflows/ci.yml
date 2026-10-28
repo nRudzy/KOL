@@ -27,7 +27,7 @@ jobs:
 
   build:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: write
     steps:
@@ -35,22 +35,42 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
-      - name: Build portable Windows executable
+      - name: Build Windows executable and installer
         env:
           KOL_REF_NAME: ${{ github.ref_name }}
           KOL_REF_TYPE: ${{ github.ref_type }}
+        shell: pwsh
         run: |
-          version=0.1.0
-          if [ "$KOL_REF_TYPE" = tag ]; then version="${KOL_REF_NAME#v}"; fi
-          ./scripts/build.sh "$version"
-          cp README.md LICENSE THIRD_PARTY_NOTICES.md dist/
-          cd dist
-          zip KOL-windows-amd64.zip KOL.exe README.md LICENSE THIRD_PARTY_NOTICES.md
-          sha256sum KOL.exe KOL-windows-amd64.zip > SHA256SUMS.txt
+          $kolVersion = '0.2.0'
+          if ($env:KOL_REF_TYPE -eq 'tag') { $kolVersion = $env:KOL_REF_NAME.TrimStart('v') }
+          ./scripts/build.ps1 -Version $kolVersion
+          ./scripts/build-installer.ps1 -Version $kolVersion -SkipAppBuild
+          "KOL_VERSION=$kolVersion" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify graceful application exit
+        shell: pwsh
+        run: |
+          $env:KOL_E2E_BINARY = (Resolve-Path dist/KOL.exe).Path
+          $env:KOL_E2E_QUIT = '1'
+          go test ./internal/desktop -run TestDesktopLifecycle -count=1 -v
+      - name: Verify install, update and uninstall
+        shell: pwsh
+        run: ./scripts/test-installer.ps1 -InstallerPath (Resolve-Path "dist/KOL-Setup-$env:KOL_VERSION.exe").Path
+      - name: Package downloads and checksums
+        shell: pwsh
+        run: |
+          Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md dist/
+          Compress-Archive -Path dist/KOL.exe,dist/README.md,dist/LICENSE,dist/THIRD_PARTY_NOTICES.md -DestinationPath dist/KOL-windows-amd64.zip
+          $kolFiles = @('dist/KOL.exe', "dist/KOL-Setup-$env:KOL_VERSION.exe", 'dist/KOL-windows-amd64.zip')
+          $kolSums = foreach ($kolFile in $kolFiles) {
+            $kolDigest = (Get-FileHash $kolFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$kolDigest  $(Split-Path $kolFile -Leaf)"
+          }
+          $kolSums | Set-Content dist/SHA256SUMS.txt -Encoding utf8NoBOM
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: KOL-windows-amd64
           path: |
+            dist/KOL-Setup-*.exe
             dist/KOL-windows-amd64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
@@ -60,4 +80,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           KOL_RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$KOL_RELEASE_TAG" dist/KOL-windows-amd64.zip dist/SHA256SUMS.txt --verify-tag --title "KOL ${KOL_RELEASE_TAG#v}" --generate-notes
+          gh release create "$env:KOL_RELEASE_TAG" "dist/KOL-Setup-$env:KOL_VERSION.exe" dist/KOL-windows-amd64.zip dist/SHA256SUMS.txt --verify-tag --title "KOL $env:KOL_VERSION" --generate-notes

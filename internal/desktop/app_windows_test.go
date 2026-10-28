@@ -222,4 +222,30 @@ func TestDesktopLifecycle(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "history.key")); err != nil {
 		t.Fatal("DPAPI key was not created", err)
 	}
+	if os.Getenv("KOL_E2E_QUIT") == "1" {
+		if os.Getenv("GITHUB_ACTIONS") != "true" {
+			t.Fatal("the all-instances quit check is restricted to the disposable CI runner")
+		}
+		if output, err := exec.Command(binaryPath, "--quit").CombinedOutput(); err != nil {
+			t.Fatalf("graceful quit failed: %v (%s)", err, output)
+		}
+		select {
+		case err := <-exited:
+			exited <- err
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("KOL did not exit")
+		}
+		key, err := platform.LoadKey(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store, err := history.Open(filepath.Join(dir, "history.db"), key)
+		if err != nil {
+			t.Fatal("shutdown did not release the database", err)
+		}
+		store.Close()
+	}
 }

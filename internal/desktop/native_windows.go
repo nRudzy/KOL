@@ -63,6 +63,9 @@ func (a *app) configureWindow() error {
 		return err
 	}
 	a.originalProc = old
+	if ok, _, err := user.NewProc("SetPropW").Call(a.hwnd, uintptr(unsafe.Pointer(utf(appWindowProperty))), 1); ok == 0 {
+		return err
+	}
 	setWindowPos.Call(a.hwnd, ^uintptr(0), 0, 0, 440, 680, 0x0027) // TOPMOST, FRAMECHANGED, no move/size
 	preference := uint32(2)
 	dwm.NewProc("DwmSetWindowAttribute").Call(a.hwnd, 33, uintptr(unsafe.Pointer(&preference)), 4)
