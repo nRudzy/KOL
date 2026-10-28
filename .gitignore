@@ -1,0 +1,11 @@
+/dist/
+/.superpowers/
+/node_modules/
+*.exe
+*.test
+*.log
+*.db
+*.db.lock
+*.key
+/cmd/kol/*.syso
+
