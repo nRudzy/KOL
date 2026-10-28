@@ -87,14 +87,24 @@ end;
 function ExplicitTaskSelection: Boolean;
 var
   I: Integer;
-  Arg: String;
+  Arg, MergedTasks: String;
 begin
   Result := False;
   for I := 1 to ParamCount do begin
     Arg := Uppercase(ParamStr(I));
-    if (Pos('/TASKS=', Arg) = 1) or (Pos('/MERGETASKS=', Arg) = 1) then begin
+    if Pos('/TASKS=', Arg) = 1 then begin
       Result := True;
       Exit;
+    end;
+    if Pos('/MERGETASKS=', Arg) = 1 then begin
+      MergedTasks := Copy(Arg, Length('/MERGETASKS=') + 1, Length(Arg));
+      StringChangeEx(MergedTasks, ' ', '', True);
+      MergedTasks := ',' + MergedTasks + ',';
+      if (Pos(',STARTUP,', MergedTasks) > 0) or
+         (Pos(',!STARTUP,', MergedTasks) > 0) then begin
+        Result := True;
+        Exit;
+      end;
     end;
   end;
 end;
@@ -147,19 +157,24 @@ begin
   if ConfigurationFailed then Result := 1;
 end;
 
-function InitializeUninstall: Boolean;
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ExitCode: Integer;
+  Prepared: Boolean;
 begin
-  Result := Exec(ExpandConstant('{app}\KOL.exe'), '--quit', '', SW_HIDE,
+  if CurUninstallStep <> usUninstall then Exit;
+  { This event runs after confirmation and before any files are deleted. }
+  Prepared := Exec(ExpandConstant('{app}\KOL.exe'), '--quit', '', SW_HIDE,
                  ewWaitUntilTerminated, ExitCode);
-  if Result then Result := ExitCode = 0;
-  if Result then begin
-    Result := Exec(ExpandConstant('{app}\KOL.exe'),
+  if Prepared then Prepared := ExitCode = 0;
+  if Prepared then begin
+    Prepared := Exec(ExpandConstant('{app}\KOL.exe'),
       '--configure-startup=disable --data-dir ' + QuotedDataDir(''), '', SW_HIDE,
       ewWaitUntilTerminated, ExitCode);
-    if Result then Result := ExitCode = 0;
+    if Prepared then Prepared := ExitCode = 0;
   end;
-  if not Result then
+  if not Prepared then begin
     SuppressibleMsgBox('Impossible de préparer la désinstallation. Fermez KOL et vérifiez que ses préférences sont accessibles.', mbError, MB_OK, IDOK);
+    Abort;
+  end;
 end;

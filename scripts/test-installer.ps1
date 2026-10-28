@@ -17,6 +17,11 @@ Set-Content (Join-Path $kolData 'settings.json') '{"startAtLogin":false,"maxItem
 $kolBeforeDB = (Get-FileHash (Join-Path $kolData 'history.db')).Hash
 $kolBeforeKey = (Get-FileHash (Join-Path $kolData 'history.key')).Hash
 
+function Get-KolStartup {
+  $kolKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
+  if (-not $kolKey) { return $null }
+  try { return $kolKey.GetValue('KOL', $null) } finally { $kolKey.Dispose() }
+}
 function Invoke-KolSetup([string]$TaskArgument = '') {
   $kolLog = Join-Path $kolScratch ('setup-' + [guid]::NewGuid().ToString('N') + '.log')
   $kolArguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=`"$kolApp`" /DataDir=`"$kolData`" /LOG=`"$kolLog`" $TaskArgument"
@@ -39,7 +44,7 @@ if ((Get-ItemProperty $kolUninstallKey).DisplayName -ne 'KOL') { throw 'KOL abse
 if ((Get-Item $kolAppPathsKey).GetValue('') -ne (Join-Path $kolApp 'KOL.exe')) { throw 'Enregistrement App Paths incorrect.' }
 $kolStartMenu = Join-Path ([Environment]::GetFolderPath('Programs')) 'KOL.lnk'
 if (-not (Test-Path $kolStartMenu)) { throw 'Raccourci du menu Démarrer absent.' }
-$kolStartup = Get-ItemPropertyValue $kolRunKey -Name KOL
+$kolStartup = Get-KolStartup
 if (-not $kolStartup.StartsWith('"' + (Join-Path $kolApp 'KOL.exe') + '"')) { throw 'Le démarrage ne vise pas la copie installée.' }
 if ((Get-Content (Join-Path $kolData 'settings.json') -Raw | ConvertFrom-Json).startAtLogin -ne $true) { throw 'Préférence de démarrage non synchronisée.' }
 Assert-KolDataPreserved
@@ -79,24 +84,30 @@ while ([DateTime]::UtcNow -lt $kolUntil) {
 if (-not $kolCancelled) { throw 'Confirmation de désinstallation introuvable.' }
 if (-not $kolCancelProcess.WaitForExit(10000)) { throw 'Annulation de désinstallation bloquée.' }
 if (-not (Test-Path $kolUninstallKey)) { throw 'Installation supprimée malgré une annulation.' }
-if ((Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue) -ne $kolStartup) { throw 'Une annulation a changé le démarrage automatique.' }
+if ((Get-KolStartup) -ne $kolStartup) { throw 'Une annulation a changé le démarrage automatique.' }
 if (-not (Get-Content (Join-Path $kolData 'settings.json') -Raw | ConvertFrom-Json).startAtLogin) { throw 'Une annulation a désactivé le démarrage.' }
 Assert-KolDataPreserved
 
 # Upgrade without explicit tasks must retain the user's enabled startup choice.
 Invoke-KolSetup
-if (-not (Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue)) { throw 'Démarrage perdu lors de la mise à jour.' }
+if (-not (Get-KolStartup)) { throw 'Démarrage perdu lors de la mise à jour.' }
 Assert-KolDataPreserved
 
 Invoke-KolSetup '/MERGETASKS=desktopicon'
-if (-not (Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue)) { throw 'Un autre raccourci a désactivé le démarrage.' }
+if (-not (Get-KolStartup)) { throw 'Un autre raccourci a désactivé le démarrage.' }
+Assert-KolDataPreserved
+
+Invoke-KolSetup '/MERGETASKS=!startup'
+if (Get-KolStartup) { throw 'La demande explicite de désactivation a été ignorée.' }
+Invoke-KolSetup '/MERGETASKS=startup'
+if (-not (Get-KolStartup)) { throw 'La demande explicite de démarrage a été ignorée.' }
 Assert-KolDataPreserved
 
 # Emulate the user turning startup off in KOL, then update again.
 $kolConfig = Start-Process -FilePath (Join-Path $kolApp 'KOL.exe') -ArgumentList "--configure-startup=disable --data-dir `"$kolData`"" -Wait -PassThru
 if ($kolConfig.ExitCode -ne 0) { throw 'Désactivation du démarrage impossible.' }
 Invoke-KolSetup
-if (Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue) { throw 'La mise à jour a réactivé le démarrage.' }
+if (Get-KolStartup) { throw 'La mise à jour a réactivé le démarrage.' }
 Assert-KolDataPreserved
 
 # Uninstall while startup is enabled, proving its entry is removed too.
@@ -109,7 +120,7 @@ if (Test-Path $kolUninstallKey) { throw 'Enregistrement de désinstallation cons
 if (Test-Path $kolAppPathsKey) { throw 'App Paths non nettoyé.' }
 if (Test-Path (Join-Path $kolApp 'KOL.exe')) { throw 'Exécutable non supprimé.' }
 if (Test-Path $kolStartMenu) { throw 'Raccourci non supprimé.' }
-if (Get-ItemPropertyValue $kolRunKey -Name KOL -ErrorAction SilentlyContinue) { throw 'Démarrage automatique non supprimé.' }
+if (Get-KolStartup) { throw 'Démarrage automatique non supprimé.' }
 if ((Get-Content (Join-Path $kolData 'settings.json') -Raw | ConvertFrom-Json).startAtLogin) { throw 'Démarrage encore activé dans les préférences.' }
 Assert-KolDataPreserved
 Write-Output 'PASS : installation, raccourci, enregistrement Windows, mise à jour, démarrage et désinstallation ; historique, clé et préférences conservés.'
